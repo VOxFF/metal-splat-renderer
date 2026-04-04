@@ -176,7 +176,8 @@ class Renderer: NSObject, MTKViewDelegate {
     func draw(node: Node, encoder: MTLRenderCommandEncoder) {
 
         guard let material = node.material,
-              let meshGeometry = node.geometry as? MeshGeometry else { return }
+              let geometry = node.geometry,
+              let meshGeometry = geometry as? MeshGeometry else { return }
 
         let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
         guard let state = renderStateCache[key] else {
@@ -196,29 +197,12 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setVertexBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
         encoder.setFragmentBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
 
-        let mesh = meshGeometry.mesh
-        for (index, element) in mesh.vertexDescriptor.layouts.enumerated()
-        {
-            guard let layout = element as? MDLVertexBufferLayout else { return }
-            if layout.stride != 0 {
-                let buffer = mesh.vertexBuffers[index]
-                encoder.setVertexBuffer(buffer.buffer, offset:buffer.offset, index: index)
-            }
-        }
         for (slot, key) in material.textureKeys {
             guard let tex = textureCache[key] else { continue }
             encoder.setFragmentTexture(tex.texture, index: slot.rawValue)
         }
-        //encoder.setFragmentTexture(colorMap, index: TextureIndex.color.rawValue)
-        
-        for submesh in mesh.submeshes {
-            encoder.drawIndexedPrimitives(type: submesh.primitiveType,
-                                                indexCount: submesh.indexCount,
-                                                indexType: submesh.indexType,
-                                                indexBuffer: submesh.indexBuffer.buffer,
-                                                indexBufferOffset: submesh.indexBuffer.offset)
-            
-        }
+
+        geometry.encodeDraw(encoder: encoder)
         encoder.popDebugGroup()
         
     }

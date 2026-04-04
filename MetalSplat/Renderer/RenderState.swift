@@ -90,11 +90,11 @@ class RenderState {
 
 struct RenderStateKey: Hashable {
     let materialHash: Int
-    let vertexDescriptorHash: Int
+    let vertexDescriptorHash: Int  // 0 when absent (e.g. splats)
 
-    init(material: Material, vertexDescriptor: MTLVertexDescriptor) {
+    init(material: Material, vertexDescriptor: MTLVertexDescriptor? = nil) {
         self.materialHash = material.hashValue()
-        self.vertexDescriptorHash = vertexDescriptor.hashValue()
+        self.vertexDescriptorHash = vertexDescriptor?.hashValue() ?? 0
     }
 
     func hash(into hasher: inout Hasher) {

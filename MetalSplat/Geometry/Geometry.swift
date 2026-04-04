@@ -7,7 +7,9 @@
 
 import MetalKit
 
-protocol Geometry: AnyObject {}
+protocol Geometry: AnyObject {
+    func encodeDraw(encoder: MTLRenderCommandEncoder)
+}
 
 protocol MeshGeometry: Geometry {
     var mesh: MTKMesh { get }

@@ -81,4 +81,19 @@ class Box: MeshGeometry {
         // 4) Create the MTKMesh from the MDLMesh
         self.mesh = try MTKMesh(mesh: mdlMesh, device: device)
     }
+
+    func encodeDraw(encoder: MTLRenderCommandEncoder) {
+        for (index, element) in mesh.vertexDescriptor.layouts.enumerated() {
+            guard let layout = element as? MDLVertexBufferLayout, layout.stride != 0 else { continue }
+            let buffer = mesh.vertexBuffers[index]
+            encoder.setVertexBuffer(buffer.buffer, offset: buffer.offset, index: index)
+        }
+        for submesh in mesh.submeshes {
+            encoder.drawIndexedPrimitives(type: submesh.primitiveType,
+                                          indexCount: submesh.indexCount,
+                                          indexType: submesh.indexType,
+                                          indexBuffer: submesh.indexBuffer.buffer,
+                                          indexBufferOffset: submesh.indexBuffer.offset)
+        }
+    }
 }
