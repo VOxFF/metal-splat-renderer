@@ -50,6 +50,26 @@ class GaussianSplatGeometry: SplatGeometry {
 
     // MARK: - Geometry
 
+    func draw(encoder: MTLRenderCommandEncoder, context: RenderContext) {
+        sortSplats(cameraPosition: context.cameraPosition)
+
+        encoder.pushDebugGroup("Draw Splats")
+        encoder.setCullMode(.none)
+        encoder.setRenderPipelineState(context.renderState.pipelineState)
+        encoder.setDepthStencilState(context.renderState.depthStencilState)
+
+        var su = SplatUniforms(projectionMatrix: context.projectionMatrix,
+                               viewMatrix: context.viewMatrix,
+                               modelMatrix: context.nodeWorldTM,
+                               viewportSize: context.viewportSize,
+                               _pad: .zero)
+        encoder.setVertexBytes(&su, length: MemoryLayout<SplatUniforms>.size,
+                               index: Int(BufferIndex.splatUniforms.rawValue))
+
+        encodeDraw(encoder: encoder)
+        encoder.popDebugGroup()
+    }
+
     func encodeDraw(encoder: MTLRenderCommandEncoder) {
         encoder.setVertexBuffer(splatBuffer,       offset: 0, index: Int(BufferIndex.splats.rawValue))
         encoder.setVertexBuffer(sortedIndexBuffer, offset: 0, index: Int(BufferIndex.splatIndices.rawValue))

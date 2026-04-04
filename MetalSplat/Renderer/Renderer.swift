@@ -123,16 +123,27 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func cacheRenderStates() {
         traverse(from: self.root) { node in
-            guard let material = node.material,
-                  let meshGeometry = node.geometry as? MeshGeometry else { return }
+            guard let material = node.material else { return }
 
-            let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
-            if renderStateCache[key] == nil {
-                do {
-                    renderStateCache[key] = try RenderState(device: device, mtkView: view,
-                                                            material: material, geometry: meshGeometry)
-                } catch {
-                    print("Failed to create RenderState for node: \(error)")
+            if let meshGeometry = node.geometry as? MeshGeometry {
+                let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
+                if renderStateCache[key] == nil {
+                    do {
+                        renderStateCache[key] = try RenderState(device: device, mtkView: view,
+                                                                material: material, geometry: meshGeometry)
+                    } catch {
+                        print("Failed to create mesh RenderState: \(error)")
+                    }
+                }
+            } else if node.geometry is SplatGeometry {
+                let key = RenderStateKey(material: material)
+                if renderStateCache[key] == nil {
+                    do {
+                        renderStateCache[key] = try RenderState(device: device, mtkView: view,
+                                                                material: material)
+                    } catch {
+                        print("Failed to create splat RenderState: \(error)")
+                    }
                 }
             }
         }
@@ -174,67 +185,66 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func draw(node: Node, encoder: MTLRenderCommandEncoder) {
-
         guard let material = node.material,
-              let geometry = node.geometry,
-              let meshGeometry = geometry as? MeshGeometry else { return }
+              let geometry = node.geometry else { return }
 
-        let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
-        guard let state = renderStateCache[key] else {
-            print("RenderState not found.")
-            return
-        }
+        let key = RenderStateKey(material: material, vertexDescriptor: geometry.vertexDescriptor)
+        guard let state = renderStateCache[key] else { return }
 
-        encoder.pushDebugGroup("Draw Mesh")
+        let ctx = RenderContext(
+            renderState:      state,
+            projectionMatrix: projectionMatrix,
+            viewMatrix:       camera.viewMatrix,
+            cameraPosition:   camera.position,
+            nodeWorldTM:      node.worldTM(),
+            viewportSize:     SIMD2<Float>(Float(view.drawableSize.width),
+                                           Float(view.drawableSize.height)),
+            textures:         resolvedTextures(for: material))
 
-        encoder.setCullMode(.back)
-        encoder.setFrontFacing(.counterClockwise)
-        encoder.setRenderPipelineState(state.pipelineState)
-        encoder.setDepthStencilState(state.depthStencilState)
-
-        var nodeUniforms = Uniforms(projectionMatrix: projectionMatrix,
-                                   modelViewMatrix: simd_mul(camera.viewMatrix, node.worldTM()))
-        encoder.setVertexBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
-        encoder.setFragmentBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
-
-        for (slot, key) in material.textureKeys {
-            guard let tex = textureCache[key] else { continue }
-            encoder.setFragmentTexture(tex.texture, index: slot.rawValue)
-        }
-
-        geometry.encodeDraw(encoder: encoder)
-        encoder.popDebugGroup()
-        
+        geometry.draw(encoder: encoder, context: ctx)
     }
 
-    func draw(in view: MTKView) { /// Per frame updates here
-        
+    private func resolvedTextures(for material: Material) -> [TextureIndex: MTLTexture] {
+        var result: [TextureIndex: MTLTexture] = [:]
+        for (slot, key) in material.textureKeys {
+            result[slot] = textureCache[key]?.texture
+        }
+        return result
+    }
+
+    func draw(in view: MTKView) {
+
         _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
-        
+
         if let commandBuffer = commandQueue.makeCommandBuffer() {
             let semaphore = inFlightSemaphore
-            commandBuffer.addCompletedHandler { (_ commandBuffer)-> Swift.Void in semaphore.signal() }
-            
+            commandBuffer.addCompletedHandler { (_ commandBuffer) in semaphore.signal() }
+
             self.updateDynamicBufferState()
             self.updateScene()
-            
-            /// Delay getting the currentRenderPassDescriptor until we absolutely need it to avoid
-            ///   holding onto the drawable and blocking the display pipeline any longer than necessary
-            if let renderPassDescriptor = view.currentRenderPassDescriptor {
-                
-                /// Final pass rendering code here
-                if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-                    renderEncoder.label = "Primary Render Encoder"
-                    //renderEncoder.pushDebugGroup("Draw Box")
-                    
-                    traverse(from: root) { draw(node: $0, encoder: renderEncoder) }
-                    
-                    //renderEncoder.popDebugGroup()
-                    renderEncoder.endEncoding()
-                    
-                    if let drawable = view.currentDrawable {
-                        commandBuffer.present(drawable)
-                    }
+
+            if let renderPassDescriptor = view.currentRenderPassDescriptor,
+               let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
+
+                renderEncoder.label = "Primary Render Encoder"
+
+                // Collect nodes by render phase in one traversal
+                var opaqueNodes: [Node] = []
+                var transparentNodes: [Node] = []
+                traverse(from: root) { node in
+                    guard node.geometry != nil else { return }
+                    if node.geometry is SplatGeometry { transparentNodes.append(node) }
+                    else { opaqueNodes.append(node) }
+                }
+
+                // Opaque first (writes depth), transparent second (reads depth, no depth write)
+                opaqueNodes.forEach      { draw(node: $0, encoder: renderEncoder) }
+                transparentNodes.forEach { draw(node: $0, encoder: renderEncoder) }
+
+                renderEncoder.endEncoding()
+
+                if let drawable = view.currentDrawable {
+                    commandBuffer.present(drawable)
                 }
             }
             commandBuffer.commit()
