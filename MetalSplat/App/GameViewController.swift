@@ -40,6 +40,40 @@ class GameViewController: NSViewController {
         renderer.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
 
         mtkView.delegate = renderer
+
+        addLoadButton()
+    }
+
+    // MARK: - Load Splat button
+
+    private func addLoadButton() {
+        let button = NSButton(title: "Load Splat…", target: self, action: #selector(loadSplatFile(_:)))
+        button.bezelStyle = .rounded
+        button.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
+            button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+        ])
+    }
+
+    private var openPanel: NSOpenPanel?
+
+    @objc func loadSplatFile(_ sender: Any?) {
+        if let panel = openPanel {
+            panel.makeKeyAndOrderFront(nil)  // bring existing panel to front
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.title = "Open Gaussian Splat"
+        panel.allowedFileTypes = ["ply"]
+        panel.allowsMultipleSelection = false
+        openPanel = panel
+        panel.begin { [weak self] response in
+            self?.openPanel = nil
+            guard response == .OK, let url = panel.url else { return }
+            self?.renderer.loadSplats(from: url)
+        }
     }
 
     override func viewDidAppear() {

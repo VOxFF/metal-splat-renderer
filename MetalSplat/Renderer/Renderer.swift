@@ -225,6 +225,30 @@ class Renderer: NSObject, MTKViewDelegate {
         }
     }
 
+    // MARK: - Scene mutations
+
+    /// Replace all splat nodes with geometry loaded from a PLY file.
+    /// File I/O runs on a background thread; scene update on main.
+    func loadSplats(from url: URL) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                let splats = try SplatPLYLoader.load(url: url)
+                print("Loaded \(splats.count) splats from \(url.lastPathComponent)")
+                let geometry = try GaussianSplatGeometry(device: self.device, splats: splats)
+                DispatchQueue.main.async {
+                    self.root.children.removeAll { $0.geometry is SplatGeometry }
+                    let node = Node(geometry: geometry, materaial: GaussianSplatMaterial())
+                    node.name = url.deletingPathExtension().lastPathComponent
+                    self.root.addChild(node)
+                    self.cacheRenderStates()
+                }
+            } catch {
+                print("Failed to load splats: \(error)")
+            }
+        }
+    }
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         /// Respond to drawable size or orientation changes here
 

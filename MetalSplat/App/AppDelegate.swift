@@ -13,7 +13,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBOutlet var window: NSWindow!
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        
+        // Add "Load Splat…" to the File menu (Cmd+O)
+        if let fileMenu = NSApp.mainMenu?.item(withTitle: "File")?.submenu {
+            let item = NSMenuItem(title: "Load Splat…",
+                                  action: #selector(GameViewController.loadSplatFile(_:)),
+                                  keyEquivalent: "o")
+            item.target = nil  // nil = route through responder chain
+            fileMenu.insertItem(item, at: 1)
+            fileMenu.insertItem(.separator(), at: 2)
+        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
