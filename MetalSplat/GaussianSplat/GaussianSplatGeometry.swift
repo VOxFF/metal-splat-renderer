@@ -51,8 +51,8 @@ class GaussianSplatGeometry: SplatGeometry {
     // MARK: - Geometry
 
     func encodeDraw(encoder: MTLRenderCommandEncoder) {
-        encoder.setVertexBuffer(splatBuffer,       offset: 0, index: Int(BufferIndexSplats.rawValue))
-        encoder.setVertexBuffer(sortedIndexBuffer, offset: 0, index: Int(BufferIndexSplatIndices.rawValue))
+        encoder.setVertexBuffer(splatBuffer,       offset: 0, index: Int(BufferIndex.splats.rawValue))
+        encoder.setVertexBuffer(sortedIndexBuffer, offset: 0, index: Int(BufferIndex.splatIndices.rawValue))
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: splatCount * 6)
     }
 }

@@ -27,64 +27,108 @@ class RenderState {
     /// A shared linear sampler (repeat addressing).
     public let samplerState: MTLSamplerState
 
+    // Mesh pipeline — uses vertex descriptor, writes depth, no blending
     init(device: MTLDevice,
          mtkView: MTKView,
          material: Material,
          geometry: MeshGeometry) throws
     {
-        // 1) Load the default library:
+        let (ps, ds, ss) = try RenderState.buildPipeline(
+            device: device,
+            mtkView: mtkView,
+            material: material,
+            vertexDescriptor: geometry.mtlVertexDescriptor,
+            blending: false,
+            depthWrite: true)
+        self.pipelineState    = ps
+        self.depthStencilState = ds
+        self.samplerState      = ss
+    }
+
+    // Splat pipeline — no vertex descriptor, no depth write, alpha blending
+    init(device: MTLDevice,
+         mtkView: MTKView,
+         material: Material) throws
+    {
+        let (ps, ds, ss) = try RenderState.buildPipeline(
+            device: device,
+            mtkView: mtkView,
+            material: material,
+            vertexDescriptor: nil,
+            blending: true,
+            depthWrite: false)
+        self.pipelineState    = ps
+        self.depthStencilState = ds
+        self.samplerState      = ss
+    }
+
+    // MARK: - Shared pipeline builder
+
+    private static func buildPipeline(
+        device: MTLDevice,
+        mtkView: MTKView,
+        material: Material,
+        vertexDescriptor: MTLVertexDescriptor?,
+        blending: Bool,
+        depthWrite: Bool
+    ) throws -> (MTLRenderPipelineState, MTLDepthStencilState, MTLSamplerState) {
+
         guard let library = device.makeDefaultLibrary() else {
             throw RenderStateError.libraryNotFound
         }
-
-        // 2) Get function names from material:
-        let vertexFunction = material.vertex_shader
-        let fragmentFunction = material.fragment_shader
-
-        guard let vfn = library.makeFunction(name: vertexFunction) else {
-            throw RenderStateError.functionNotFound(name: vertexFunction)
+        guard let vfn = library.makeFunction(name: material.vertex_shader) else {
+            throw RenderStateError.functionNotFound(name: material.vertex_shader)
         }
-        guard let ffn = library.makeFunction(name: fragmentFunction) else {
-            throw RenderStateError.functionNotFound(name: fragmentFunction)
+        guard let ffn = library.makeFunction(name: material.fragment_shader) else {
+            throw RenderStateError.functionNotFound(name: material.fragment_shader)
         }
-
-        // 3) Get vertex descriptor from geometry:
-        let vertexDescriptor = geometry.mtlVertexDescriptor
 
         let pDesc = MTLRenderPipelineDescriptor()
-        pDesc.label = "Pipeline_\(vertexFunction)_\(fragmentFunction)"
-        pDesc.vertexFunction = vfn
-        pDesc.fragmentFunction = ffn
-        pDesc.vertexDescriptor = vertexDescriptor
+        pDesc.label                     = "Pipeline_\(material.vertex_shader)_\(material.fragment_shader)"
+        pDesc.vertexFunction            = vfn
+        pDesc.fragmentFunction          = ffn
+        pDesc.vertexDescriptor          = vertexDescriptor
         pDesc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat
-        pDesc.rasterSampleCount = mtkView.sampleCount
-        pDesc.depthAttachmentPixelFormat = mtkView.depthStencilPixelFormat
+        pDesc.rasterSampleCount         = mtkView.sampleCount
+        pDesc.depthAttachmentPixelFormat   = mtkView.depthStencilPixelFormat
         pDesc.stencilAttachmentPixelFormat = mtkView.depthStencilPixelFormat
 
+        if blending {
+            let ca = pDesc.colorAttachments[0]!
+            ca.isBlendingEnabled             = true
+            ca.rgbBlendOperation             = .add
+            ca.alphaBlendOperation           = .add
+            ca.sourceRGBBlendFactor          = .one               // pre-multiplied alpha
+            ca.destinationRGBBlendFactor     = .oneMinusSourceAlpha
+            ca.sourceAlphaBlendFactor        = .one
+            ca.destinationAlphaBlendFactor   = .oneMinusSourceAlpha
+        }
+
+        let pipelineState: MTLRenderPipelineState
         do {
-            self.pipelineState = try device.makeRenderPipelineState(descriptor: pDesc)
+            pipelineState = try device.makeRenderPipelineState(descriptor: pDesc)
         } catch {
             throw RenderStateError.pipelineCreationFailed(error)
         }
 
         let dsDesc = MTLDepthStencilDescriptor()
         dsDesc.depthCompareFunction = .less
-        dsDesc.isDepthWriteEnabled = true
+        dsDesc.isDepthWriteEnabled  = depthWrite
         guard let dsState = device.makeDepthStencilState(descriptor: dsDesc) else {
             fatalError("Failed to create MTLDepthStencilState")
         }
-        self.depthStencilState = dsState
 
         let sampDesc = MTLSamplerDescriptor()
-        sampDesc.minFilter = .linear
-        sampDesc.magFilter = .linear
-        sampDesc.mipFilter = .nearest
+        sampDesc.minFilter    = .linear
+        sampDesc.magFilter    = .linear
+        sampDesc.mipFilter    = .nearest
         sampDesc.sAddressMode = .repeat
         sampDesc.tAddressMode = .repeat
         guard let ss = device.makeSamplerState(descriptor: sampDesc) else {
             fatalError("Failed to create MTLSamplerState")
         }
-        self.samplerState = ss
+
+        return (pipelineState, dsState, ss)
     }
 }
 
