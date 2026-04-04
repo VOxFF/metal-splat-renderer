@@ -11,11 +11,6 @@ import Metal
 import MetalKit
 import simd
 
-// The 256 byte aligned size of our uniform structure
-let alignedUniformsSize = (MemoryLayout<Uniforms>.size + 0xFF) & -0x100
-
-let maxBuffersInFlight = 10
-
 enum RendererError: Error {
     case badVertexDescriptor
 }
@@ -30,14 +25,7 @@ class Renderer: NSObject, MTKViewDelegate {
     var textureCache: [TextureKey: Texture] = [:]
     
     let commandQueue: MTLCommandQueue
-    var dynamicUniformBuffer: MTLBuffer
-
-    let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
-
-    var uniformBufferOffset = 0
-    var uniformBufferIndex = 0
-
-    var uniforms: UnsafeMutablePointer<Uniforms>
+    let inFlightSemaphore = DispatchSemaphore(value: 3)
 
     var projectionMatrix: matrix_float4x4 = matrix_float4x4()
     let camera = Camera()
@@ -58,13 +46,6 @@ class Renderer: NSObject, MTKViewDelegate {
 
         self.commandQueue = self.device.makeCommandQueue()!
 
-        let uniformBufferSize = alignedUniformsSize * maxBuffersInFlight
-        self.dynamicUniformBuffer = self.device.makeBuffer(length:uniformBufferSize,
-                                                           options:[MTLResourceOptions.storageModeShared])!
-        self.dynamicUniformBuffer.label = "UniformBuffer"
-        uniforms = UnsafeMutableRawPointer(dynamicUniformBuffer.contents()).bindMemory(to:Uniforms.self, capacity:1)
-
-
         super.init()
         self.loadScene()
         self.cacheRenderStates()
@@ -83,10 +64,10 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func loadScene() {
-        do {
-            self.root = Node()
-            self.root.name = "Root"
+        self.root = Node()
+        self.root.name = "Root"
 
+        do {
             let mtl = DefaultMaterial()
             mtl.setTexture(filename: "ColorMap", at: TextureIndex.color)
 
@@ -108,12 +89,22 @@ class Renderer: NSObject, MTKViewDelegate {
             })
             node2.name = "Box2"
 
-            root.addChild(node1)
-            root.addChild(node2)
-
+            // root.addChild(node1)
+            // root.addChild(node2)
         } catch {
             print("Box creation failed: \(error)")
-            return
+        }
+
+        do {
+            let splats = ProceduralSplats.grid(count: 5, spacing: 0.6, scale: 0.15)
+            print("Procedural splat count: \(splats.count)")
+            let splatGeometry = try GaussianSplatGeometry(device: device, splats: splats)
+            let splatNode = Node(geometry: splatGeometry, materaial: GaussianSplatMaterial())
+            splatNode.name = "TestSplats"
+            root.addChild(splatNode)
+            print("Splat node added to scene")
+        } catch {
+            print("Splat creation failed: \(error)")
         }
     }
     
@@ -124,12 +115,17 @@ class Renderer: NSObject, MTKViewDelegate {
     func cacheRenderStates() {
         traverse(from: self.root) { node in
             guard let material = node.material, let geometry = node.geometry else { return }
+            print("Caching render state for '\(node.name)' type=\(type(of: geometry))")
             let key = RenderStateKey(material: material, vertexDescriptor: geometry.vertexDescriptor)
-            guard renderStateCache[key] == nil else { return }
+            guard renderStateCache[key] == nil else {
+                print("  → already cached")
+                return
+            }
             do {
                 renderStateCache[key] = try geometry.makeRenderState(device: device, mtkView: view, material: material)
+                print("  → created OK")
             } catch {
-                print("Failed to create RenderState: \(error)")
+                print("  → FAILED: \(error)")
             }
         }
         print("RenderState cache size: \(renderStateCache.count)")
@@ -160,21 +156,15 @@ class Renderer: NSObject, MTKViewDelegate {
         print("Texture cache size: \(textureCache.count)")
     }
 
-    private func updateDynamicBufferState() {
-        /// Update the state of our uniform buffers before rendering
-
-        uniformBufferIndex = (uniformBufferIndex + 1) % maxBuffersInFlight
-        uniformBufferOffset = alignedUniformsSize * uniformBufferIndex
-
-        uniforms = UnsafeMutableRawPointer(dynamicUniformBuffer.contents() + uniformBufferOffset).bindMemory(to:Uniforms.self, capacity:1)
-    }
-    
     func draw(node: Node, encoder: MTLRenderCommandEncoder) {
         guard let material = node.material,
               let geometry = node.geometry else { return }
 
         let key = RenderStateKey(material: material, vertexDescriptor: geometry.vertexDescriptor)
-        guard let state = renderStateCache[key] else { return }
+        guard let state = renderStateCache[key] else {
+            print("No render state for '\(node.name)' — key missing from cache")
+            return
+        }
 
         let ctx = RenderContext(
             renderState:      state,
@@ -205,7 +195,6 @@ class Renderer: NSObject, MTKViewDelegate {
             let semaphore = inFlightSemaphore
             commandBuffer.addCompletedHandler { (_ commandBuffer) in semaphore.signal() }
 
-            self.updateDynamicBufferState()
             self.updateScene()
 
             if let renderPassDescriptor = view.currentRenderPassDescriptor,

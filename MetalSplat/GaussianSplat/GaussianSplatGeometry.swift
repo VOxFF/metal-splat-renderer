@@ -1,6 +1,10 @@
 import Metal
 import simd
 
+enum GaussianSplatError: Error {
+    case bufferAllocationFailed
+}
+
 class GaussianSplatGeometry: SplatGeometry {
 
     public let splatCount: Int
@@ -9,20 +13,22 @@ class GaussianSplatGeometry: SplatGeometry {
 
     private let splats: [GaussianSplatData]  // CPU mirror for sort key computation
 
-    init(device: MTLDevice, splats: [GaussianSplatData]) {
+    init(device: MTLDevice, splats: [GaussianSplatData]) throws {
         self.splatCount = splats.count
         self.splats = splats
 
         // storageModeShared — CPU writes sorted indices, GPU reads splat data
-        splatBuffer = device.makeBuffer(
+        guard let sb = device.makeBuffer(
             bytes: splats,
             length: splats.count * MemoryLayout<GaussianSplatData>.stride,
-            options: .storageModeShared)!
+            options: .storageModeShared) else { throw GaussianSplatError.bufferAllocationFailed }
+        splatBuffer = sb
         splatBuffer.label = "SplatBuffer"
 
-        sortedIndexBuffer = device.makeBuffer(
+        guard let ib = device.makeBuffer(
             length: splats.count * MemoryLayout<UInt32>.stride,
-            options: .storageModeShared)!
+            options: .storageModeShared) else { throw GaussianSplatError.bufferAllocationFailed }
+        sortedIndexBuffer = ib
         sortedIndexBuffer.label = "SplatSortedIndices"
 
         // Identity order — overwritten every frame by sortSplats()
