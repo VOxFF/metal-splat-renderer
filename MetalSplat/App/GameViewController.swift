@@ -41,4 +41,27 @@ class GameViewController: NSViewController {
 
         mtkView.delegate = renderer
     }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.makeFirstResponder(self)
+    }
+
+    // MARK: - Orbit (left drag)
+
+    override func mouseDragged(with event: NSEvent) {
+        renderer.camera.orbit(dx: Float(event.deltaX), dy: Float(event.deltaY))
+    }
+
+    // MARK: - Pan (middle drag)
+
+    override func otherMouseDragged(with event: NSEvent) {
+        renderer.camera.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
+    }
+
+    // MARK: - Dolly (scroll wheel / trackpad)
+
+    override func scrollWheel(with event: NSEvent) {
+        renderer.camera.dolly(delta: Float(event.scrollingDeltaY))
+    }
 }

@@ -40,7 +40,7 @@ class Renderer: NSObject, MTKViewDelegate {
     var uniforms: UnsafeMutablePointer<Uniforms>
 
     var projectionMatrix: matrix_float4x4 = matrix_float4x4()
-    var rotation: Float = 0
+    let camera = Camera()
 
     
     
@@ -193,9 +193,8 @@ class Renderer: NSObject, MTKViewDelegate {
         
         
         /// set uniforms — pass inline so each node gets its own transform
-        let viewMatrix = matrix4x4_translation(0.0, 0.0, -8.0)
         var nodeUniforms = Uniforms(projectionMatrix: projectionMatrix,
-                                   modelViewMatrix: simd_mul(viewMatrix, node.worldTM()))
+                                   modelViewMatrix: simd_mul(camera.viewMatrix, node.worldTM()))
         encoder.setVertexBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
         encoder.setFragmentBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
         
