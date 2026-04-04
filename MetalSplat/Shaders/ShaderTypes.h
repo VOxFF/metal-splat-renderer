@@ -52,16 +52,14 @@ typedef struct
     matrix_float4x4 modelViewMatrix;
 } Uniforms;
 
-// Per-splat data — 64 bytes, matches GaussianSplatData Swift struct field-for-field
+// Per-splat data — 64 bytes exactly (4 × float4), matches GaussianSplatData Swift struct.
+// All groups use float4 to avoid implicit alignment padding between vector_float3 and float4.
 typedef struct
 {
-    vector_float3 position;  // world-space center
-    float         opacity;   // pre-sigmoid [0,1]
-    vector_float4 rotation;  // unit quaternion xyzw
-    vector_float3 scale;     // half-axes after exp(), world units
-    float         _pad0;
-    vector_float3 color;     // linear RGB from DC spherical harmonics
-    float         _pad1;
+    vector_float4 positionAndOpacity;  // xyz = world-space center, w = opacity [0,1]
+    vector_float4 rotation;            // unit quaternion xyzw
+    vector_float4 scaleAndPad;         // xyz = half-axes (world units), w = unused
+    vector_float4 colorAndPad;         // xyz = linear RGB, w = unused
 } GaussianSplat;
 
 // Uniforms for the splat render path

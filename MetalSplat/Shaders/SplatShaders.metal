@@ -27,10 +27,15 @@ vertex SplatVaryings splatVertexShader(
     GaussianSplat s = splats[splatIdx];
     float2 corner   = quadCorners[cornerIdx];
 
+    float3 sPosition = s.positionAndOpacity.xyz;
+    float  sOpacity  = s.positionAndOpacity.w;
+    float3 sScale    = s.scaleAndPad.xyz;
+    float3 sColor    = s.colorAndPad.xyz;
+
     // --- Build 3x3 covariance in world space: Sigma = R * S^2 * R^T ---
 
     // Quaternion (xyzw) → rotation matrix (column-major)
-    float4 q = normalize(float4(s.rotation));
+    float4 q = normalize(s.rotation);
     float x = q.x, y = q.y, z = q.z, w = q.w;
     float3x3 R = float3x3(
         float3(1 - 2*(y*y + z*z),     2*(x*y + w*z),     2*(x*z - w*y)),
@@ -38,11 +43,10 @@ vertex SplatVaryings splatVertexShader(
         float3(    2*(x*z + w*y),     2*(y*z - w*x), 1 - 2*(x*x + y*y))
     );
 
-    float3 sc = s.scale;
     float3x3 S = float3x3(
-        float3(sc.x, 0,    0),
-        float3(0,    sc.y, 0),
-        float3(0,    0,    sc.z)
+        float3(sScale.x, 0,       0),
+        float3(0,        sScale.y, 0),
+        float3(0,        0,        sScale.z)
     );
 
     float3x3 RS   = R * S;
@@ -50,7 +54,7 @@ vertex SplatVaryings splatVertexShader(
 
     // --- Project covariance to 2D screen space (EWA splatting) ---
 
-    float4 posView = u.viewMatrix * u.modelMatrix * float4(s.position, 1.0);
+    float4 posView = u.viewMatrix * u.modelMatrix * float4(sPosition, 1.0);
     float3 t = posView.xyz;
 
     // Reject splats behind or too near the camera
@@ -129,8 +133,7 @@ vertex SplatVaryings splatVertexShader(
     out.position = outPos;
     out.uv       = corner;  // ±1 corresponds to ±3σ
 
-    float alpha  = s.opacity;
-    out.color    = float4(s.color * alpha, alpha);  // pre-multiplied
+    out.color    = float4(sColor * sOpacity, sOpacity);  // pre-multiplied alpha
 
     return out;
 }
