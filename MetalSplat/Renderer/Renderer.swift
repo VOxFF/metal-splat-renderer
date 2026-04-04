@@ -123,28 +123,13 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func cacheRenderStates() {
         traverse(from: self.root) { node in
-            guard let material = node.material else { return }
-
-            if let meshGeometry = node.geometry as? MeshGeometry {
-                let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
-                if renderStateCache[key] == nil {
-                    do {
-                        renderStateCache[key] = try RenderState(device: device, mtkView: view,
-                                                                material: material, geometry: meshGeometry)
-                    } catch {
-                        print("Failed to create mesh RenderState: \(error)")
-                    }
-                }
-            } else if node.geometry is SplatGeometry {
-                let key = RenderStateKey(material: material)
-                if renderStateCache[key] == nil {
-                    do {
-                        renderStateCache[key] = try RenderState(device: device, mtkView: view,
-                                                                material: material)
-                    } catch {
-                        print("Failed to create splat RenderState: \(error)")
-                    }
-                }
+            guard let material = node.material, let geometry = node.geometry else { return }
+            let key = RenderStateKey(material: material, vertexDescriptor: geometry.vertexDescriptor)
+            guard renderStateCache[key] == nil else { return }
+            do {
+                renderStateCache[key] = try geometry.makeRenderState(device: device, mtkView: view, material: material)
+            } catch {
+                print("Failed to create RenderState: \(error)")
             }
         }
         print("RenderState cache size: \(renderStateCache.count)")

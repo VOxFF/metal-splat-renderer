@@ -11,6 +11,9 @@ protocol Geometry: AnyObject {
     /// Vertex descriptor used to build the pipeline state + cache key. Nil for splats.
     var vertexDescriptor: MTLVertexDescriptor? { get }
 
+    /// Builds the appropriate RenderState for this geometry type.
+    func makeRenderState(device: MTLDevice, mtkView: MTKView, material: Material) throws -> RenderState
+
     /// Full draw setup (pipeline, uniforms, cull mode) + calls encodeDraw.
     func draw(encoder: MTLRenderCommandEncoder, context: RenderContext)
 
@@ -25,6 +28,10 @@ protocol MeshGeometry: Geometry {
 
 extension MeshGeometry {
     var vertexDescriptor: MTLVertexDescriptor? { mtlVertexDescriptor }
+
+    func makeRenderState(device: MTLDevice, mtkView: MTKView, material: Material) throws -> RenderState {
+        try RenderState(device: device, mtkView: mtkView, material: material, geometry: self)
+    }
 
     func draw(encoder: MTLRenderCommandEncoder, context: RenderContext) {
         encoder.pushDebugGroup("Draw Mesh")
@@ -58,4 +65,8 @@ protocol SplatGeometry: Geometry {
 
 extension SplatGeometry {
     var vertexDescriptor: MTLVertexDescriptor? { nil }
+
+    func makeRenderState(device: MTLDevice, mtkView: MTKView, material: Material) throws -> RenderState {
+        try RenderState(device: device, mtkView: mtkView, material: material)
+    }
 }
