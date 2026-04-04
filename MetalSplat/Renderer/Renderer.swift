@@ -84,18 +84,32 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func loadScene() {
         do {
-            let box = try Box(device: device, scale: 4.0, segments: SIMD3<UInt32>(3,3,3))
+            self.root = Node()
+            self.root.name = "Root"
+
             let mtl = DefaultMaterial()
             mtl.setTexture(filename: "ColorMap", at: TextureIndex.color)
-            self.root = Node(geometry: box, materaial: mtl, tmFn: { t in
-                // rotate a bit each frame around (1,1,0)
-                let delta: Float = 0.01
-                let axis = normalize(SIMD3<Float>(1,1,0))
-                let dq = simd_quatf(angle: delta, axis: axis)
+
+            let box1 = try Box(device: device, scale: 2.0, segments: SIMD3<UInt32>(2,2,2))
+            let node1 = Node(geometry: box1, materaial: mtl, tmFn: { t in
+                t.position = SIMD3<Float>(-4, 0, 0)
+                let dq = simd_quatf(angle: 0.01, axis: normalize(SIMD3<Float>(1, 1, 0)))
                 t.rotation = dq * t.rotation
                 return t.matrix()
             })
-            
+            node1.name = "Box1"
+
+            let box2 = try Box(device: device, scale: 2.0, segments: SIMD3<UInt32>(2,2,2))
+            let node2 = Node(geometry: box2, materaial: mtl, tmFn: { t in
+                t.position = SIMD3<Float>(4, 0, 0)
+                let dq = simd_quatf(angle: -0.015, axis: normalize(SIMD3<Float>(0, 1, 1)))
+                t.rotation = dq * t.rotation
+                return t.matrix()
+            })
+            node2.name = "Box2"
+
+            root.addChild(node1)
+            root.addChild(node2)
 
         } catch {
             print("Box creation failed: \(error)")
@@ -178,13 +192,12 @@ class Renderer: NSObject, MTKViewDelegate {
         encoder.setDepthStencilState(state.depthStencilState)
         
         
-        /// set uniforms
+        /// set uniforms — pass inline so each node gets its own transform
         let viewMatrix = matrix4x4_translation(0.0, 0.0, -8.0)
-        uniforms[0].projectionMatrix = projectionMatrix
-        uniforms[0].modelViewMatrix = simd_mul(viewMatrix, node.tm)
-        
-        encoder.setVertexBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
-        encoder.setFragmentBuffer(dynamicUniformBuffer, offset:uniformBufferOffset, index: BufferIndex.uniforms.rawValue)
+        var nodeUniforms = Uniforms(projectionMatrix: projectionMatrix,
+                                   modelViewMatrix: simd_mul(viewMatrix, node.worldTM()))
+        encoder.setVertexBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
+        encoder.setFragmentBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
         
         let mesh = geometry.mesh
         for (index, element) in mesh.vertexDescriptor.layouts.enumerated()
@@ -233,7 +246,7 @@ class Renderer: NSObject, MTKViewDelegate {
                     renderEncoder.label = "Primary Render Encoder"
                     //renderEncoder.pushDebugGroup("Draw Box")
                     
-                    draw(node: root, encoder: renderEncoder)
+                    traverse(from: root) { draw(node: $0, encoder: renderEncoder) }
                     
                     //renderEncoder.popDebugGroup()
                     renderEncoder.endEncoding()
