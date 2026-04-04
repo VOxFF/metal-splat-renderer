@@ -60,7 +60,7 @@ protocol SplatGeometry: Geometry {
     var splatCount: Int { get }
     var splatBuffer: MTLBuffer { get }
     var sortedIndexBuffer: MTLBuffer { get }
-    func sortSplats(cameraPosition: SIMD3<Float>)
+    func sortSplats(commandBuffer: MTLCommandBuffer, cameraPosition: SIMD3<Float>, cameraForward: SIMD3<Float>)
 }
 
 extension SplatGeometry {

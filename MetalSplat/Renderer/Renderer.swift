@@ -197,19 +197,29 @@ class Renderer: NSObject, MTKViewDelegate {
 
             self.updateScene()
 
+            // Collect nodes by render phase
+            var opaqueNodes: [Node] = []
+            var transparentNodes: [Node] = []
+            traverse(from: root) { node in
+                guard node.geometry != nil else { return }
+                if node.geometry is SplatGeometry { transparentNodes.append(node) }
+                else { opaqueNodes.append(node) }
+            }
+
+            // GPU sort all splat nodes before opening the render encoder
+            let camForward = normalize(camera.target - camera.position)
+            for node in transparentNodes {
+                if let splat = node.geometry as? SplatGeometry {
+                    splat.sortSplats(commandBuffer: commandBuffer,
+                                     cameraPosition: camera.position,
+                                     cameraForward:  camForward)
+                }
+            }
+
             if let renderPassDescriptor = view.currentRenderPassDescriptor,
                let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
 
                 renderEncoder.label = "Primary Render Encoder"
-
-                // Collect nodes by render phase in one traversal
-                var opaqueNodes: [Node] = []
-                var transparentNodes: [Node] = []
-                traverse(from: root) { node in
-                    guard node.geometry != nil else { return }
-                    if node.geometry is SplatGeometry { transparentNodes.append(node) }
-                    else { opaqueNodes.append(node) }
-                }
 
                 // Opaque first (writes depth), transparent second (reads depth, no depth write)
                 opaqueNodes.forEach      { draw(node: $0, encoder: renderEncoder) }

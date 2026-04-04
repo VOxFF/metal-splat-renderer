@@ -7,17 +7,19 @@ enum GaussianSplatError: Error {
 
 class GaussianSplatGeometry: SplatGeometry {
 
-    public let splatCount: Int
-    public let splatBuffer: MTLBuffer
+    public let splatCount:    Int
+    public let paddedCount:   Int   // next power-of-2 ≥ splatCount
+    public let splatBuffer:   MTLBuffer
     public let sortedIndexBuffer: MTLBuffer
+    public let keysBuffer:    MTLBuffer  // Float per padded slot
 
-    private let splats: [GaussianSplatData]  // CPU mirror for sort key computation
+    let sorter: GPUSorter
 
     init(device: MTLDevice, splats: [GaussianSplatData]) throws {
-        self.splatCount = splats.count
-        self.splats = splats
+        self.splatCount  = splats.count
+        self.paddedCount = GaussianSplatGeometry.nextPow2(splats.count)
+        self.sorter      = try GPUSorter(device: device)
 
-        // storageModeShared — CPU writes sorted indices, GPU reads splat data
         guard let sb = device.makeBuffer(
             bytes: splats,
             length: splats.count * MemoryLayout<GaussianSplatData>.stride,
@@ -25,40 +27,39 @@ class GaussianSplatGeometry: SplatGeometry {
         splatBuffer = sb
         splatBuffer.label = "SplatBuffer"
 
+        // sortedIndexBuffer and keysBuffer are GPU-private — written by compute, read by vertex shader
         guard let ib = device.makeBuffer(
-            length: splats.count * MemoryLayout<UInt32>.stride,
-            options: .storageModeShared) else { throw GaussianSplatError.bufferAllocationFailed }
+            length: paddedCount * MemoryLayout<UInt32>.stride,
+            options: .storageModePrivate) else { throw GaussianSplatError.bufferAllocationFailed }
         sortedIndexBuffer = ib
         sortedIndexBuffer.label = "SplatSortedIndices"
 
-        // Identity order — overwritten every frame by sortSplats()
-        let ptr = sortedIndexBuffer.contents().bindMemory(to: UInt32.self, capacity: splats.count)
-        for i in 0..<splats.count { ptr[i] = UInt32(i) }
+        guard let kb = device.makeBuffer(
+            length: paddedCount * MemoryLayout<Float>.stride,
+            options: .storageModePrivate) else { throw GaussianSplatError.bufferAllocationFailed }
+        keysBuffer = kb
+        keysBuffer.label = "SplatDepthKeys"
+        // Both buffers are initialized by computeDepthKeys on the first sort pass.
     }
 
     // MARK: - SplatGeometry
 
-    func sortSplats(cameraPosition: SIMD3<Float>) {
-        // Compute squared distance from each splat to the camera.
-        // Sorting by squared distance is equivalent to sorting by distance
-        // and avoids a sqrt per splat.
-        let sorted = splats.indices.sorted {
-            let a = SIMD3<Float>(splats[$0].posX, splats[$0].posY, splats[$0].posZ) - cameraPosition
-            let b = SIMD3<Float>(splats[$1].posX, splats[$1].posY, splats[$1].posZ) - cameraPosition
-            return dot(a, a) > dot(b, b)  // back-to-front: farthest first
-        }
-
-        let ptr = sortedIndexBuffer.contents().bindMemory(to: UInt32.self, capacity: splatCount)
-        for (i, idx) in sorted.enumerated() {
-            ptr[i] = UInt32(idx)
-        }
+    func sortSplats(commandBuffer: MTLCommandBuffer, cameraPosition: SIMD3<Float>, cameraForward: SIMD3<Float>) {
+        sorter.encode(
+            commandBuffer:  commandBuffer,
+            splatBuffer:    splatBuffer,
+            keysBuffer:     keysBuffer,
+            indexBuffer:    sortedIndexBuffer,
+            splatCount:     splatCount,
+            paddedCount:    paddedCount,
+            cameraPosition: cameraPosition,
+            cameraForward:  cameraForward)
     }
 
     // MARK: - Geometry
 
     func draw(encoder: MTLRenderCommandEncoder, context: RenderContext) {
-        sortSplats(cameraPosition: context.cameraPosition)
-
+        // sort is encoded before this render pass by the renderer
         encoder.pushDebugGroup("Draw Splats")
         encoder.setCullMode(.none)
         encoder.setRenderPipelineState(context.renderState.pipelineState)
@@ -80,5 +81,14 @@ class GaussianSplatGeometry: SplatGeometry {
         encoder.setVertexBuffer(splatBuffer,       offset: 0, index: Int(BufferIndex.splats.rawValue))
         encoder.setVertexBuffer(sortedIndexBuffer, offset: 0, index: Int(BufferIndex.splatIndices.rawValue))
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: splatCount * 6)
+    }
+
+    // MARK: - Helpers
+
+    private static func nextPow2(_ n: Int) -> Int {
+        guard n > 1 else { return 1 }
+        var p = 1
+        while p < n { p <<= 1 }
+        return p
     }
 }
