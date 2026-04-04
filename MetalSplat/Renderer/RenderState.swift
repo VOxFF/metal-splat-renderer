@@ -30,7 +30,7 @@ class RenderState {
     init(device: MTLDevice,
          mtkView: MTKView,
          material: Material,
-         geometry: Geometry) throws
+         geometry: MeshGeometry) throws
     {
         // 1) Load the default library:
         guard let library = device.makeDefaultLibrary() else {

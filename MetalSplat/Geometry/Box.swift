@@ -9,7 +9,7 @@ import MetalKit
 
 /// A helper class that encapsulates “build a box mesh” logic.
 /// After init, you can grab `mesh` and `vertexDescriptor` from an instance of Box.
-class Box : Geometry {
+class Box: MeshGeometry {
     /// The MetalKit mesh that can be drawn by the renderer.
     public let mesh: MTKMesh
 

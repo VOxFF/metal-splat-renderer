@@ -124,13 +124,13 @@ class Renderer: NSObject, MTKViewDelegate {
     func cacheRenderStates() {
         traverse(from: self.root) { node in
             guard let material = node.material,
-                  let geometry = node.geometry else { return }
+                  let meshGeometry = node.geometry as? MeshGeometry else { return }
 
-            let key = RenderStateKey(material: material, vertexDescriptor: geometry.mtlVertexDescriptor)
+            let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
             if renderStateCache[key] == nil {
                 do {
                     renderStateCache[key] = try RenderState(device: device, mtkView: view,
-                                                            material: material, geometry: geometry)
+                                                            material: material, geometry: meshGeometry)
                 } catch {
                     print("Failed to create RenderState for node: \(error)")
                 }
@@ -173,32 +173,30 @@ class Renderer: NSObject, MTKViewDelegate {
         uniforms = UnsafeMutableRawPointer(dynamicUniformBuffer.contents() + uniformBufferOffset).bindMemory(to:Uniforms.self, capacity:1)
     }
     
-    func draw(node: Node, encoder: MTLRenderCommandEncoder) {  /// Call for every node in hierarchy
-        
+    func draw(node: Node, encoder: MTLRenderCommandEncoder) {
+
         guard let material = node.material,
-              let geometry = node.geometry else { return }
-        
-        let key = RenderStateKey(material: material, vertexDescriptor: geometry.mtlVertexDescriptor)
+              let meshGeometry = node.geometry as? MeshGeometry else { return }
+
+        let key = RenderStateKey(material: material, vertexDescriptor: meshGeometry.mtlVertexDescriptor)
         guard let state = renderStateCache[key] else {
             print("RenderState not found.")
             return
         }
-        
-        encoder.pushDebugGroup("Draw Box")
-        
+
+        encoder.pushDebugGroup("Draw Mesh")
+
         encoder.setCullMode(.back)
         encoder.setFrontFacing(.counterClockwise)
         encoder.setRenderPipelineState(state.pipelineState)
         encoder.setDepthStencilState(state.depthStencilState)
-        
-        
-        /// set uniforms — pass inline so each node gets its own transform
+
         var nodeUniforms = Uniforms(projectionMatrix: projectionMatrix,
                                    modelViewMatrix: simd_mul(camera.viewMatrix, node.worldTM()))
         encoder.setVertexBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
         encoder.setFragmentBytes(&nodeUniforms, length: MemoryLayout<Uniforms>.size, index: BufferIndex.uniforms.rawValue)
-        
-        let mesh = geometry.mesh
+
+        let mesh = meshGeometry.mesh
         for (index, element) in mesh.vertexDescriptor.layouts.enumerated()
         {
             guard let layout = element as? MDLVertexBufferLayout else { return }

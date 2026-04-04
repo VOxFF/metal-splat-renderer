@@ -7,7 +7,16 @@
 
 import MetalKit
 
-protocol Geometry : AnyObject {
-  var mesh: MTKMesh { get }
-  var mtlVertexDescriptor: MTLVertexDescriptor { get }
+protocol Geometry: AnyObject {}
+
+protocol MeshGeometry: Geometry {
+    var mesh: MTKMesh { get }
+    var mtlVertexDescriptor: MTLVertexDescriptor { get }
+}
+
+protocol SplatGeometry: Geometry {
+    var splatCount: Int { get }
+    var splatBuffer: MTLBuffer { get }
+    var sortedIndexBuffer: MTLBuffer { get }
+    func sortSplats(cameraPosition: SIMD3<Float>)
 }
