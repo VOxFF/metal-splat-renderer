@@ -60,3 +60,15 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Build output
+build/
+DerivedData/
+*.xcarchive
+
+# macOS
+.DS_Store
+
+# Splat data files (large binaries)
+*.ply
+*.splat
