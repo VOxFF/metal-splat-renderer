@@ -15,22 +15,22 @@ Renders Gaussian splats alongside traditional mesh geometry in a shared scene gr
 
 ## Splat rendering pipeline
 
-1. **CPU sort** — splats sorted back-to-front by squared distance to camera each frame
-2. **Vertex shader** — EWA projection: builds 3D covariance from quaternion + scale, projects to 2D screen-space ellipse via perspective Jacobian, eigendecomposes to get ellipse axes and radii
+1. **GPU sort** — splats sorted back-to-front by squared distance to camera each frame on the GPU
+2. **Vertex shader** — EWA projection: builds 3D covariance from quaternion + scale, projects to 2D screen-space ellipse via perspective Jacobian, eigendecomposes to get ellipse axes and radii; screen-space radius clamped to prevent nearby splats from covering the view
 3. **Fragment shader** — Gaussian falloff `exp(-4.5 * |uv|²)` where `uv = ±1` corresponds to the 3σ quad edge; pre-multiplied alpha output
 
 ## Current state
 
-- Procedural 5×5×5 test grid of colored gaussian blobs
 - PLY loader for real 3DGS scenes (binary little-endian format)
 - Orbit / pan / dolly camera controls
+- Live sliders for zoom speed and minimum dolly distance
 
 ## Controls
 
 | Gesture | Action |
 |---------|--------|
 | Drag | Orbit |
-| Shift + Drag | Pan |
+| Middle drag | Pan |
 | Scroll | Dolly |
 
 ## References
