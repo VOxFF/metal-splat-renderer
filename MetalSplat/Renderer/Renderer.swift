@@ -252,6 +252,7 @@ class Renderer: NSObject, MTKViewDelegate {
                     node.name = url.deletingPathExtension().lastPathComponent
                     self.root.addChild(node)
                     self.cacheRenderStates()
+                    self.fitCamera(to: splats)
                 }
             } catch {
                 print("Failed to load splats: \(error)")
@@ -259,11 +260,41 @@ class Renderer: NSObject, MTKViewDelegate {
         }
     }
 
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        /// Respond to drawable size or orientation changes here
+    // MARK: - Camera fit
 
-        let aspect = Float(size.width) / Float(size.height)
-        projectionMatrix = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.1, farZ: 100.0)
+    private func fitCamera(to splats: [GaussianSplatData]) {
+        guard !splats.isEmpty else { return }
+        var xs = splats.map { $0.posX }.sorted()
+        var ys = splats.map { $0.posY }.sorted()
+        var zs = splats.map { $0.posZ }.sorted()
+        let p = { (arr: [Float], pct: Float) -> Float in arr[Int(Float(arr.count-1) * pct)] }
+        // Use 5th–95th percentile to ignore outlier positions
+        let lo = SIMD3<Float>(p(xs, 0.05), p(ys, 0.05), p(zs, 0.05))
+        let hi = SIMD3<Float>(p(xs, 0.95), p(ys, 0.95), p(zs, 0.95))
+        camera.target    = (lo + hi) * 0.5
+        camera.radius    = max(0.5, length(hi - lo) * 1.2)
+        camera.elevation = 0.3   // reset to a gentle side angle
+        camera.azimuth   = 0.0
+        print("fitCamera: center=\(camera.target) radius=\(camera.radius)")
+
+        // Recompute projection with near/far relative to new radius so the
+        // scene is never clipped by the fixed farZ=100 default.
+        updateProjection()
+    }
+
+    func updateProjection() {
+        let aspect = Float(view.drawableSize.width) / Float(view.drawableSize.height)
+        let nearZ  = max(0.001, camera.radius * 0.001)
+        let farZ   = camera.radius * 100.0
+        projectionMatrix = matrix_perspective_right_hand(
+            fovyRadians: radians_from_degrees(65),
+            aspectRatio: aspect,
+            nearZ: nearZ,
+            farZ: farZ)
+    }
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        updateProjection()
     }
 }
 

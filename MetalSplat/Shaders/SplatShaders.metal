@@ -16,10 +16,10 @@ struct SplatVaryings {
 };
 
 vertex SplatVaryings splatVertexShader(
-    uint                     vid           [[ vertex_id ]],
-    constant GaussianSplat*  splats        [[ buffer(BufferIndexSplats) ]],
-    constant uint*           sortedIndices [[ buffer(BufferIndexSplatIndices) ]],
-    constant SplatUniforms&  u             [[ buffer(BufferIndexSplatUniforms) ]])
+    uint                          vid           [[ vertex_id ]],
+    device const GaussianSplat*   splats        [[ buffer(BufferIndexSplats) ]],
+    device const uint*            sortedIndices [[ buffer(BufferIndexSplatIndices) ]],
+    constant SplatUniforms&       u             [[ buffer(BufferIndexSplatUniforms) ]])
 {
     uint splatIdx  = sortedIndices[vid / 6];
     uint cornerIdx = vid % 6;

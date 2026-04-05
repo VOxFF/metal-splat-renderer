@@ -110,15 +110,26 @@ struct SplatPLYLoader {
                 let sy = exp(f(oScale1))
                 let sz = exp(f(oScale2))
 
+                // Skip background / initialisation splats — Scaniverse (and some
+                // other trainers) leave large opaque spheres at the scene boundary
+                // (scale_raw == 2.0 → scale_exp ≈ 7.4) that form an opaque shell
+                // hiding the actual content.  Any splat whose largest axis exceeds
+                // this threshold is treated as a background artefact and dropped.
+                let maxScale: Float = 2.72  // exp(1.0) — anything above 1 log-unit
+                if max(sx, max(sy, sz)) > maxScale { continue }
+
                 // DC SH → linear RGB: color = clamp(0.5 + SH_C0 * f_dc, 0, 1)
                 let cr = min(max(0.5 + SH_C0 * f(oFdc0), 0), 1)
                 let cg = min(max(0.5 + SH_C0 * f(oFdc1), 0), 1)
                 let cb = min(max(0.5 + SH_C0 * f(oFdc2), 0), 1)
 
+                // Scaniverse exports with Y pointing down; flip to Y-up world.
+                // Position: negate Y.
+                // Quaternion Y-reflection: negate the X and Z vector components.
                 splats.append(GaussianSplatData(
-                    posX: f(oX), posY: f(oY), posZ: f(oZ),
+                    posX:  f(oX), posY: -f(oY), posZ: f(oZ),
                     opacity: opacity,
-                    rotX: qx/qLen, rotY: qy/qLen, rotZ: qz/qLen, rotW: qw/qLen,
+                    rotX: -qx/qLen, rotY: qy/qLen, rotZ: -qz/qLen, rotW: qw/qLen,
                     scaleX: sx, scaleY: sy, scaleZ: sz,
                     colorR: cr, colorG: cg, colorB: cb
                 ))
