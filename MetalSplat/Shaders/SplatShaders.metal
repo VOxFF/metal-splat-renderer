@@ -116,9 +116,9 @@ vertex SplatVaryings splatVertexShader(
     float2 axis1 = (length(ev) > 1e-4) ? normalize(ev) : float2(1.0, 0.0);
     float2 axis2 = float2(-axis1.y, axis1.x);
 
-    // 3-sigma radii in pixels
-    float rad1 = 3.0 * sqrt(lam1);
-    float rad2 = 3.0 * sqrt(lam2);
+    // 3-sigma radii in pixels — clamp to prevent nearby splats blowing up to full screen
+    float rad1 = min(3.0 * sqrt(lam1), 256.0);
+    float rad2 = min(3.0 * sqrt(lam2), 256.0);
 
     // --- Build clip-space output position ---
 
@@ -130,6 +130,7 @@ vertex SplatVaryings splatVertexShader(
     float4 outPos  = clipCenter;
     outPos.xy     += ndcOffset * clipCenter.w;
 
+    outPos.x     = -outPos.x;  // flip horizontally so scene is not mirrored
     out.position = outPos;
     out.uv       = corner;  // ±1 corresponds to ±3σ
 

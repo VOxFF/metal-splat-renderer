@@ -42,6 +42,43 @@ class GameViewController: NSViewController {
         mtkView.delegate = renderer
 
         addLoadButton()
+        addZoomSpeedSlider()
+    }
+
+    // MARK: - Zoom speed slider
+
+    private func addZoomSpeedSlider() {
+        let zoomLabel = NSTextField(labelWithString: "Zoom speed")
+        zoomLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let zoomSlider = NSSlider(value: 0.2, minValue: 0.05, maxValue: 1.0, target: self, action: #selector(zoomSpeedChanged(_:)))
+        zoomSlider.translatesAutoresizingMaskIntoConstraints = false
+        zoomSlider.widthAnchor.constraint(equalToConstant: 100).isActive = true
+
+        let minLabel = NSTextField(labelWithString: "Min distance")
+        minLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let minSlider = NSSlider(value: 0.4, minValue: 0.05, maxValue: 5.0, target: self, action: #selector(minRadiusChanged(_:)))
+        minSlider.translatesAutoresizingMaskIntoConstraints = false
+        minSlider.widthAnchor.constraint(equalToConstant: 100).isActive = true
+
+        let stack = NSStackView(views: [zoomLabel, zoomSlider, minLabel, minSlider])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12)
+        ])
+    }
+
+    @objc private func zoomSpeedChanged(_ sender: NSSlider) {
+        renderer.camera.zoomSpeed = Float(sender.doubleValue)
+    }
+
+    @objc private func minRadiusChanged(_ sender: NSSlider) {
+        renderer.camera.minRadius = Float(sender.doubleValue)
     }
 
     // MARK: - Load Splat button

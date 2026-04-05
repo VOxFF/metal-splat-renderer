@@ -5,6 +5,8 @@ class Camera {
     var azimuth:   Float = 0.0
     var elevation: Float = 0.3      // radians above horizon
     var radius:    Float = 15.0
+    var zoomSpeed:   Float = 0.2
+    var minRadius:   Float = 0.4
 
     var position: SIMD3<Float> {
         let x = radius * cos(elevation) * sin(azimuth)
@@ -48,6 +50,6 @@ class Camera {
     }
 
     func dolly(delta: Float) {
-        radius = max(0.5, radius - delta * 0.5)
+        radius = max(minRadius, radius - delta * zoomSpeed)
     }
 }
