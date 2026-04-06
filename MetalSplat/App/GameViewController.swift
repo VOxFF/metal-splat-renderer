@@ -111,13 +111,15 @@ class GameViewController: NSViewController {
         view.window?.makeFirstResponder(self)
     }
 
-    // MARK: - Orbit (left drag)
+    // MARK: - Orbit (left drag) / Pan (Cmd + left drag or middle drag)
 
     override func mouseDragged(with event: NSEvent) {
-        renderer.camera.orbit(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        if event.modifierFlags.contains(.command) {
+            renderer.camera.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        } else {
+            renderer.camera.orbit(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        }
     }
-
-    // MARK: - Pan (middle drag)
 
     override func otherMouseDragged(with event: NSEvent) {
         renderer.camera.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
