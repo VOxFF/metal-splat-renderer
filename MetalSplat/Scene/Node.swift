@@ -1,10 +1,3 @@
-//
-//  Node.swift
-//  LearningMetal
-//
-//  Created by Volodymyr Dubovyi on 6/10/25.
-//
-
 import Foundation
 import simd
 

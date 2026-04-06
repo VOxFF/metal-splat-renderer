@@ -1,10 +1,3 @@
-//
-//  Renderer.swift
-//  LearningMetal
-//
-//  Created by Volodymyr Dubovyi on 6/5/25.
-//
-
 // Our platform independent renderer class
 
 import Metal

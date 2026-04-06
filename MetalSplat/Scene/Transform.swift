@@ -1,10 +1,3 @@
-//
-//  Transform.swift
-//  LearningMetal
-//
-//  Created by Volodymyr Dubovyi on 6/29/25.
-//
-
 import Foundation
 
 import simd

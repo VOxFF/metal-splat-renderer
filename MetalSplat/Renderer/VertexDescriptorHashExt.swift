@@ -1,10 +1,3 @@
-//
-//  VertexDescriptorHashExt.swift
-//  LearningMetal
-//
-//  Created by Volodymyr Dubovyi on 6/23/25.
-//
-
 import Foundation
 import Metal
 import MetalKit

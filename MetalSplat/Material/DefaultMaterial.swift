@@ -1,10 +1,3 @@
-//
-//  DefaultMaterial.swift
-//  LearningMetal
-//
-//  Created by Volodymyr Dubovyi on 6/11/25.
-//
-
 import Foundation
 
 class DefaultMaterial : Material {
