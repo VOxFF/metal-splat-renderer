@@ -1,6 +1,6 @@
 //
 //  Shaders.metal
-//  LearningMetal
+//  MetalSplats
 //
 //  Created by Volodymyr Dubovyi on 6/5/25.
 //
